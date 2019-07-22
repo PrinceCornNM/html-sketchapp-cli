@@ -96,10 +96,6 @@ require('yargs')
         const symbolsUrl = argv.serve ? urlJoin(`http://localhost:${String(port)}`, argv.url || '/') : url;
         const debug = argv.debug;
 
-        const symbolLayerMiddleware = resolveMiddleware(argv.symbolLayerMiddleware);
-        const symbolMiddleware = resolveMiddleware(argv.symbolMiddleware);
-        const symbolInstanceMiddleware = resolveMiddleware(argv.symbolInstanceMiddleware);
-
         const launchArgs = {
             args: argv.puppeteerArgs ? argv.puppeteerArgs.split(' ') : [],
             executablePath: argv.puppeteerExecutablePath,
@@ -119,27 +115,18 @@ require('yargs')
 
           await page.goto(symbolsUrl, { waitUntil: argv.puppeteerWaitUntil });
 
-          const bundle = await rollup({
-            input: path.resolve(__dirname, '../script/generateAlmostSketch.js'),
-            plugins: [
-              require('rollup-plugin-node-resolve')(),
-              require('rollup-plugin-commonjs')()
-            ]
+          // replace the next section with the page2layers
+          await page.addScriptTag({
+            path: path.resolve(__dirname, './page2layers.bundle.js')
           });
 
-          const { code } = await bundle.generate({
-            format: 'iife',
-            name: 'generateAlmostSketch'
-          });
+          // JSON.parse + JSON.stringify hack is only needed until
+          // https://github.com/GoogleChrome/puppeteer/issues/1510 is fixed
 
-          await page.addScriptTag({ content: code });
-
-          await page.evaluate('generateAlmostSketch.setupSymbols({ name: "html-sketchapp symbols" })');
-
-          await page.evaluate('generateAlmostSketch.snapshotColorStyles()');
-
+          const asketchPageJSONStringPromises = [];
           const viewports = argv.viewports || { Desktop: '1024x768' };
-          const hasViewports = Object.keys(viewports).length > 1;
+          let asketchPageJSONString;
+          let asketchPageJSONPromise;
           for (const viewportName in viewports) {
             if (viewports.hasOwnProperty(viewportName)) {
               const viewport = viewports[viewportName];
@@ -147,24 +134,21 @@ require('yargs')
               const [ width, height ] = size.split('x').map(x => parseInt(x, 10));
               const deviceScaleFactor = typeof scale === 'undefined' ? 1 : parseFloat(scale);
               await page.setViewport({ width, height, deviceScaleFactor });
-              await page.evaluate(`generateAlmostSketch.snapshotTextStyles({ suffix: "${hasViewports ? `/${viewportName}` : ''}" })`);
-              await page.evaluate(`generateAlmostSketch.snapshotSymbols({ suffix: "${hasViewports ? `/${viewportName}` : ''}", symbolLayerMiddleware: ${symbolLayerMiddleware}, symbolMiddleware: ${symbolMiddleware}, symbolInstanceMiddleware: ${symbolInstanceMiddleware}  })`);
+
+              asketchPageJSONString = await page.evaluate(
+                'JSON.stringify(page2layers.run())'
+              );
+
+              const outputPath = path.resolve(process.cwd(), argv.outDir);
+              await mkdirpAsync(outputPath);
+
+              const outputPagePath = path.join(outputPath, `page-${viewport}.asketch.json`);
+              asketchPageJSONPromise = writeFileAsync(outputPagePath, asketchPageJSONString);
+              asketchPageJSONStringPromises.push(asketchPageJSONPromise);
             }
           }
 
-          const asketchDocumentJSON = await page.evaluate('generateAlmostSketch.getDocumentJSON()');
-          const asketchPageJSON = await page.evaluate('generateAlmostSketch.getPageJSON()');
-
-          const outputPath = path.resolve(process.cwd(), argv.outDir);
-          await mkdirpAsync(outputPath);
-
-          const outputPagePath = path.join(outputPath, 'page.asketch.json');
-          const outputDocumentPath = path.join(outputPath, 'document.asketch.json');
-
-          await Promise.all([
-            writeFileAsync(outputPagePath, asketchPageJSON),
-            writeFileAsync(outputDocumentPath, asketchDocumentJSON)
-          ]);
+          await Promise.all(asketchPageJSONStringPromises);
         } finally {
           if (browser && typeof browser.close === 'function' && !debug) {
             browser.close();
