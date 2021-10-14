@@ -10,8 +10,8 @@
     "html-sketchapp": "bin/cli.js"
   },
   "scripts": {
-    "lint": "eslint bin script test",
-    "test": "npm run lint && jest",
+    "lint": "eslint bin test",
+    "test": "jest",
     "commit": "git-cz",
     "commitmsg": "commitlint --edit --extends seek",
     "travis-deploy-once": "travis-deploy-once",
@@ -36,7 +36,7 @@
   },
   "homepage": "https://github.com/seek-oss/html-sketchapp-cli#readme",
   "dependencies": {
-    "@brainly/html-sketchapp": "^4.0.0",
+    "@brainly/html-sketchapp": "^4.5.0",
     "axios": "^0.18.0",
     "decompress": "^4.2.0",
     "es6-promisify": "^6.0.0",
@@ -59,8 +59,7 @@
     "commitizen": "^2.9.6",
     "commitlint-config-seek": "^1.0.0",
     "cz-conventional-changelog": "^2.1.0",
-    "eslint": "^5.12.0",
-    "eslint-config-seek": "^4.0.0",
+    "eslint-config-seek": "^4.3.2",
     "husky": "^0.14.3",
     "jest": "^22.0.1",
     "semantic-release": "^15.1.3",
